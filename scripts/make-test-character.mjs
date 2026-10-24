@@ -109,7 +109,7 @@ await mkdir(target, { recursive: true });
 await writeFile(join(target, "test-character.gltf"), JSON.stringify(gltf));
 await writeFile(join(target, "character.json"), JSON.stringify({
   model: "test-character.gltf",
-  yaw: 0,
+  yaw: 180,
   parts: {
     flowParts: ["Cap"],
     eyes: { nodes: ["eyeL", "eyeR"] }
