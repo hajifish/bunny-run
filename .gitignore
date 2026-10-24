@@ -1,5 +1,6 @@
 node_modules/
 dist/
 public/vendor/
+public/models/character/
 .DS_Store
 *.log
