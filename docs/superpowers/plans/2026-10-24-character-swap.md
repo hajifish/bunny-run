@@ -586,23 +586,21 @@ export function createKeelOver() {
       keelPose = keel.step(dt);
       bunny.position.y = Math.max(0, keelStartY * (1 - Math.min(1, keelPose.age / 0.22)));
       bunny.rotation.z += keelPose.angle;
-      if (keelPose.justSettled) {
-        // dust lands here in Task 7
-      }
+      // Task 7 fills this in: when keelPose.justSettled, burst dust at the body.
     }
 ```
 
-(The +Z rotation tips the — after yaw — right-facing character backward, head away from the run direction; dropping `position.y` to 0 over 0.22 s handles mid-air deaths, where `state.y` freezes.)
+(The +Z rotation tips the — after yaw — right-facing character backward, head away from the run direction; dropping `position.y` to 0 over 0.22 s handles mid-air deaths, where `state.y` freezes. Leave `keelPose.justSettled` unconsumed in this task — consuming it is Task 7's job.)
 
 6. Eye amount (line ~205): replace `const amount = state.phase === "over" ? Math.min(1, deathAge / 0.1) : 0;` with `const amount = keelPose ? keelPose.eyeClose : 0;`, and reset `keelPose = null;` alongside the other per-frame resets (add it to the `if (state.phase !== "over") keel = null;` line: `if (state.phase !== "over") { keel = null; keelPose = null; }`).
 
-- [ ] **Step 6: Verify death for both characters**
+- [ ] **Step 3: Verify death for both characters**
 
 1. No-fixture fallback: `rm -rf public/models/character`, reload. Start with Space, deliberately don't jump → cactus hit. Expected: character tips backward to lying flat with one small settle; NOT a forward roll; mid-air deaths also end flat on the ground. Screenshot after settling. Eyes: bunny eyes squint closed (vertex path).
 2. Test fixtures: `node scripts/make-test-character.mjs`, reload, die again. Expected: blocky figure keels over; `eyeL`/`eyeR` visibly squash shut (scale path). Screenshot.
 3. `browser_console_messages`: no new errors.
 
-- [ ] **Step 7: Commit**
+- [ ] **Step 4: Commit**
 
 ```bash
 git add -A
