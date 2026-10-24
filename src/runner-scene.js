@@ -3,7 +3,7 @@ import { createScoreStars, starSlot } from "./score-stars.js";
 import { simplifyBunnyLimbs } from "./bunny-limbs.js";
 import { SUN } from "./sun-light.js";
 import * as THREE from "./vendor/three.module.min.js";
-import { GLTFLoader } from "./vendor/GLTFLoader.js";
+import { loadCharacter } from "./character.js";
 import { createToyFinish } from "./toy-finish.js";
 import { createCarrot } from "./carrot.js";
 import { createCactus } from "./cactus.js";
@@ -41,24 +41,27 @@ export async function createRunnerScene(canvas) {
   scene.add(light);
   const desert = await createDesert(scene);
   const bunny = new THREE.Group();
-  const model = (await new GLTFLoader().loadAsync(`${import.meta.env.BASE_URL}models/snacky-bunny/bunny.glb`)).scene;
-  simplifyBunnyLimbs(model);
+  const { model, parts, isFallback } = await loadCharacter();
+  if (isFallback) simplifyBunnyLimbs(model);
   bunny.add(model);
   scene.add(bunny);
   bunny.rotation.y = -Math.PI / 2;
   const eyes = [];
-  model.traverse((o) => {
-    if (o.isMesh && o.material?.name === "bunny_eye") {
-      o.geometry = o.geometry.clone();
-      const rest = o.geometry.attributes.position.array.slice();
-      const centers = [-1, 1].map((side) => {
-        const box = new THREE.Box3();
-        for (let i = 0; i < rest.length; i += 3) if (Math.sign(rest[i]) === side) box.expandByPoint(new THREE.Vector3(rest[i], rest[i + 1], rest[i + 2]));
-        return box.getCenter(new THREE.Vector3());
-      });
-      eyes.push({ mesh: o, rest, centers });
-    }
-  });
+  if (parts.eyes?.material) {
+    model.traverse((o) => {
+      if (o.isMesh && o.material?.name === parts.eyes?.material) {
+        o.geometry = o.geometry.clone();
+        const rest = o.geometry.attributes.position.array.slice();
+        const centers = [-1, 1].map((side) => {
+          const box = new THREE.Box3();
+          for (let i = 0; i < rest.length; i += 3) if (Math.sign(rest[i]) === side) box.expandByPoint(new THREE.Vector3(rest[i], rest[i + 1], rest[i + 2]));
+          return box.getCenter(new THREE.Vector3());
+        });
+        eyes.push({ mesh: o, rest, centers });
+      }
+    });
+  }
+  const scaleEyeStates = (parts.eyes?.nodes || []).map((name) => model.getObjectByName(name)).filter(Boolean).map((mesh) => ({ mesh, base: mesh.scale.y }));
   model.traverse((o) => {
     if (o.isMesh) {
       o.castShadow = true;
@@ -75,20 +78,21 @@ export async function createRunnerScene(canvas) {
       bounds.union(node.geometry.boundingBox.clone().applyMatrix4(node.matrixWorld));
     }
   });
-  const head = model.getObjectByName("head");
+  const head = parts.head ? model.getObjectByName(parts.head) : null;
   head?.geometry?.computeBoundingBox();
   const headTop = head?.geometry ? head.localToWorld(new THREE.Vector3(0, head.geometry.boundingBox.max.y, 0)).y : bounds.max.y;
   const scale = 1.5 * (DINO.height / 100) / Math.max(0.1, headTop - bounds.min.y);
   bunny.scale.setScalar(scale);
   model.position.y = -bounds.min.y;
   const limbs = [];
-  for (const [name, side, isLeg] of [
-    ["armL", 1, false],
-    ["armR", -1, false],
-    ["footL", 1, true],
-    ["footR", -1, true]
-  ]) {
-    const node = model.getObjectByName(name);
+  const limbSpecs = [
+    [parts.armL, 1, false],
+    [parts.armR, -1, false],
+    [parts.footL, 1, true],
+    [parts.footR, -1, true]
+  ];
+  for (const [partName, side, isLeg] of limbSpecs) {
+    const node = partName ? model.getObjectByName(partName) : null;
     if (!node) continue;
     const pivot = new THREE.Group();
     pivot.position.copy(node.position);
@@ -98,11 +102,13 @@ export async function createRunnerScene(canvas) {
     pivot.add(node);
     limbs.push({ pivot, side, isLeg, spring: createSpring() });
   }
-  for (const name of ["short_leg_footL", "short_leg_footR"]) {
-    const leg = model.getObjectByName(name);
-    if (leg) leg.visible = false;
+  if (isFallback) {
+    for (const name of ["short_leg_footL", "short_leg_footR"]) {
+      const leg = model.getObjectByName(name);
+      if (leg) leg.visible = false;
+    }
   }
-  const ears = ["earL", "earR"].map((name) => {
+  const ears = isFallback ? ["earL", "earR"].map((name) => {
     const node = model.getObjectByName(name), surfaces = [];
     if (node) node.scale.y *= 1.1;
     node?.traverse((o) => {
@@ -115,7 +121,7 @@ export async function createRunnerScene(canvas) {
     const min = Math.min(...surfaces.map((s) => s.mesh.geometry.boundingBox.min.y));
     const max = Math.max(...surfaces.map((s) => s.mesh.geometry.boundingBox.max.y));
     return { surfaces, min, span: Math.max(0.01, max - min), chain: createEarChain() };
-  });
+  }) : [];
   const obstacles = /* @__PURE__ */ new Map(), carrots = /* @__PURE__ */ new Map();
   function createObstacle(o) {
     const group = createCactus(o.kind, o.width, o.height, o.variant);
@@ -203,15 +209,18 @@ export async function createRunnerScene(canvas) {
       bunny.position.y = pose.y;
     } else lastBodyAngle = -0.1 + softness.lean;
     const amount = state.phase === "over" ? Math.min(1, deathAge / 0.1) : 0;
-    if (amount !== lastEyeAmount) for (const { mesh, rest, centers } of eyes) {
-      const positions = mesh.geometry.attributes.position;
-      for (let i = 0; i < positions.count; i++) {
-        const x = rest[i * 3], y = rest[i * 3 + 1], z = rest[i * 3 + 2], center = centers[x < 0 ? 0 : 1];
-        const dx = x - center.x;
-        positions.setXYZ(i, x + dx * 0.35 * amount, y + (center.y + (y - center.y) * 0.14 + Math.abs(dx) * 0.75 - y) * amount, z);
+    if (amount !== lastEyeAmount) {
+      for (const { mesh, rest, centers } of eyes) {
+        const positions = mesh.geometry.attributes.position;
+        for (let i = 0; i < positions.count; i++) {
+          const x = rest[i * 3], y = rest[i * 3 + 1], z = rest[i * 3 + 2], center = centers[x < 0 ? 0 : 1];
+          const dx = x - center.x;
+          positions.setXYZ(i, x + dx * 0.35 * amount, y + (center.y + (y - center.y) * 0.14 + Math.abs(dx) * 0.75 - y) * amount, z);
+        }
+        positions.needsUpdate = true;
+        mesh.geometry.computeVertexNormals();
       }
-      positions.needsUpdate = true;
-      mesh.geometry.computeVertexNormals();
+      for (const { mesh, base } of scaleEyeStates) mesh.scale.y = base * (1 - 0.92 * amount);
     }
     lastEyeAmount = amount;
     bunny.updateMatrixWorld(true);
@@ -296,7 +305,7 @@ export async function createRunnerScene(canvas) {
     cardBunny.position.set(center, 0, 0.6);
     cardBunny.rotation.set(0, Math.PI, 0);
     cardBunny.scale.setScalar(scale * zoom * 1.65);
-    const cardHead = cardBunny.getObjectByName("head");
+    const cardHead = parts.head ? cardBunny.getObjectByName(parts.head) : null;
     if (cardHead) cardHead.rotation.x = headRest;
     cardBunny.traverse((node) => {
       const eye = eyes.find((entry) => entry.mesh.geometry === node.geometry);
