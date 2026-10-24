@@ -1,4 +1,4 @@
-import { createBunnyFall } from "./bunny-fall.js";
+import { createKeelOver } from "./keel-over.js";
 import { createScoreStars, starSlot } from "./score-stars.js";
 import { simplifyBunnyLimbs } from "./bunny-limbs.js";
 import { SUN } from "./sun-light.js";
@@ -156,7 +156,7 @@ export async function createRunnerScene(canvas) {
   const headSpring = createSpring();
   const headRest = head?.rotation.x || 0;
   const reducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)");
-  let fall = null, lastBodyAngle = -0.1, fallShape = null;
+  let keel = null, keelStartY = 0, keelPose = null;
   let takeoffAge = 10;
   let lastTime = 0, lastJumps = 0, lastElapsed = 0, lastEyeAmount = -1;
   return { render(state, now, paused = false) {
@@ -169,18 +169,14 @@ export async function createRunnerScene(canvas) {
     activeStars = scoreStars.update(state.score, state.phase, dt);
     deathAge = state.phase === "over" ? deathAge + dt : 0;
     if (state.phase !== "over") {
-      fall = null;
-      fallShape = null;
+      keel = null;
+      keelPose = null;
     }
     camera.position.x = state.phase === "over" ? Math.sin(deathAge * 65) * 0.065 * Math.exp(-deathAge * 8) : 0;
     const motionDt = state.phase === "playing" ? Math.max(0, Math.min(0.05, state.elapsed - lastElapsed)) : dt;
     lastElapsed = state.elapsed;
     const softness = rubber.update(state, motionDt);
-    if (state.phase === "over" && !fall) {
-      fallShape = { ...softness };
-      fall = createBunnyFall(state.impact || { speed: state.speed, vy: state.vy, y: state.y, contactY: state.y + 55 }, lastBodyAngle, fallShape.vertical, fallShape.horizontal);
-    }
-    const bodyShape = fallShape || softness;
+    const bodyShape = softness;
     bunny.scale.set(scale * bodyShape.horizontal, scale * bodyShape.vertical, scale * bodyShape.horizontal);
     const zoom = (state.viewWidth || 1e3) / 1e3;
     camera.left = -5;
@@ -201,14 +197,17 @@ export async function createRunnerScene(canvas) {
     bunny.rotation.set(0, -Math.PI / 2, 0);
     bunny.rotation.z = (state.phase === "playing" ? -0.1 : 0) + softness.lean;
     if (head) head.rotation.x = headRest + stepSpring(headSpring, -softness.lean * 1.8 - (softness.vertical - 1) * 0.7, motionDt, 65, 7);
-    if (fall) {
-      const pose = fall.step(dt);
-      bunny.quaternion.setFromAxisAngle(new THREE.Vector3(0, 0, 1), pose.angle);
-      bunny.quaternion.multiply(new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 1, 0), -Math.PI / 2));
-      bunny.position.x += pose.x;
-      bunny.position.y = pose.y;
-    } else lastBodyAngle = -0.1 + softness.lean;
-    const amount = state.phase === "over" ? Math.min(1, deathAge / 0.1) : 0;
+    if (state.phase === "over" && !keel) {
+      keel = createKeelOver();
+      keelStartY = bunny.position.y;
+    }
+    if (keel) {
+      keelPose = keel.step(dt);
+      bunny.position.y = Math.max(0, keelStartY * (1 - Math.min(1, keelPose.age / 0.22)));
+      bunny.rotation.z += keelPose.angle;
+      // Task 7 fills this in: when keelPose.justSettled, burst dust at the body.
+    }
+    const amount = keelPose ? keelPose.eyeClose : 0;
     if (amount !== lastEyeAmount) {
       for (const { mesh, rest, centers } of eyes) {
         const positions = mesh.geometry.attributes.position;
