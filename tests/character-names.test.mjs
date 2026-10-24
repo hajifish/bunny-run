@@ -30,3 +30,11 @@ test("rejects ambiguous or unrelated names", () => {
   assert.equal(matchPart(names, "head"), null);
   assert.equal(matchPart(names, "armL"), null);
 });
+
+test("matches Blender-style duplicate suffixes", () => {
+  const names = ["arm.left.001", "hand.r.002", "Head_01", "shoe_l"];
+  assert.equal(matchPart(names, "armL"), "arm.left.001");
+  assert.equal(matchPart(names, "armR"), "hand.r.002");
+  assert.equal(matchPart(names, "head"), "Head_01");
+  assert.equal(matchPart(names, "footL"), "shoe_l");
+});

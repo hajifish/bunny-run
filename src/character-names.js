@@ -1,4 +1,3 @@
-const SIDES = { left: "l", right: "r" };
 const BASES = {
   head: ["head"],
   arm: ["arm", "hand"],
@@ -18,9 +17,10 @@ export function analyzeName(name) {
     }
   }
   if (!base) return null;
+  const stem = flat.replace(/\d+$/, "");
   const remainder = (probe) => {
-    if (flat.endsWith(probe[0])) return flat.slice(0, -probe[0].length);
-    if (flat.startsWith(probe[0])) return flat.slice(probe[0].length);
+    if (stem.endsWith(probe[0])) return stem.slice(0, -probe[0].length);
+    if (stem.startsWith(probe[0])) return stem.slice(probe[0].length);
     return null;
   };
   let side = null;
