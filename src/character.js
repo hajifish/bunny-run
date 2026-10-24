@@ -46,11 +46,12 @@ function resolveParts(names, pins) {
 export async function loadCharacter() {
   const root = import.meta.env.BASE_URL;
   const config = await fetchConfig(`${root}models/character/character.json`) || DEFAULTS;
+  const modelFile = config.model || DEFAULTS.model;
   let model, isFallback = false;
   try {
-    model = (await new GLTFLoader().loadAsync(`${root}models/character/${config.model}`)).scene;
+    model = (await new GLTFLoader().loadAsync(`${root}models/character/${modelFile}`)).scene;
   } catch {
-    if (config.model !== DEFAULTS.model) console.warn("[character] custom model failed to load — using the bunny instead");
+    if (modelFile !== DEFAULTS.model) console.warn("[character] custom model failed to load — using the bunny instead");
     model = (await new GLTFLoader().loadAsync(`${root}models/snacky-bunny/bunny.glb`)).scene;
     isFallback = true;
   }
@@ -58,7 +59,13 @@ export async function loadCharacter() {
   model.traverse((node) => {
     if (node.name) names.push(node.name);
   });
-  const parts = isFallback ? BUNNY_PARTS : resolveParts(names, config.parts || {});
-  if (config.yaw) model.rotation.y += config.yaw * Math.PI / 180;
+  let parts;
+  try {
+    parts = isFallback ? BUNNY_PARTS : resolveParts(names, config.parts || {});
+  } catch {
+    console.warn("[character] character.json parts config is malformed — using automatic part detection");
+    parts = resolveParts(names, {});
+  }
+  if (typeof config.yaw === "number" && Number.isFinite(config.yaw) && config.yaw) model.rotation.y += config.yaw * Math.PI / 180;
   return { model, parts, isFallback };
 }
