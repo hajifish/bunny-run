@@ -159,6 +159,7 @@ export async function createRunnerScene(canvas) {
   let keel = null, keelStartY = 0, keelPose = null;
   const KEEL_AXIS = new THREE.Vector3(0, 0, 1), KEEL_YAW = new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 1, 0), -Math.PI / 2);
   let takeoffAge = 10;
+  let wasAirborne = false, lastVy = 0, shakeAge = 10, shakeStrength = 0;
   let lastTime = 0, lastJumps = 0, lastElapsed = 0, lastEyeAmount = -1;
   return { render(state, now, paused = false) {
     const w = canvas.clientWidth, h = canvas.clientHeight;
@@ -188,6 +189,21 @@ export async function createRunnerScene(canvas) {
     camera.lookAt(camera.position.x, 1.3 * zoom, 0);
     if (!reducedMotion.matches && takeoffAge < 0.18) {
       camera.position.y += 0.035 * zoom * Math.cos(takeoffAge * 55) * Math.exp(-takeoffAge * 22);
+    }
+    const airborne = state.y > 0;
+    if (state.phase === "playing" && wasAirborne && !airborne) {
+      shakeAge = 0;
+      shakeStrength = Math.min(1, Math.abs(lastVy) / 650);
+    }
+    if (state.phase === "playing") {
+      lastVy = state.vy;
+      wasAirborne = airborne;
+    }
+    shakeAge += dt;
+    if (!reducedMotion.matches && shakeAge < 0.16) {
+      const decay = Math.exp(-shakeAge * 20);
+      camera.position.y += Math.sin(shakeAge * 70) * 0.032 * shakeStrength * decay * zoom;
+      camera.position.x += Math.sin(shakeAge * 53 + 1.3) * 0.016 * shakeStrength * decay;
     }
     camera.updateProjectionMatrix();
     const running = state.phase === "playing" && state.y === 0;
