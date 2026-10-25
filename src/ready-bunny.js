@@ -1,6 +1,6 @@
+import { loadCharacter } from "./character.js";
 import { simplifyBunnyLimbs } from "./bunny-limbs.js";
 import * as THREE from "./vendor/three.module.min.js";
-import { GLTFLoader } from "./vendor/GLTFLoader.js";
 export async function renderReadyBunny(canvas, iconCanvas) {
   const renderer = new THREE.WebGLRenderer({ canvas, alpha: true, antialias: true, preserveDrawingBuffer: true });
   renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
@@ -12,20 +12,22 @@ export async function renderReadyBunny(canvas, iconCanvas) {
   const light = new THREE.DirectionalLight(16774631, 2.4);
   light.position.set(-3, 5, 6);
   scene.add(light);
-  const model = (await new GLTFLoader().loadAsync(`${import.meta.env.BASE_URL}models/snacky-bunny/bunny.glb`)).scene;
+  const { model, parts, isFallback } = await loadCharacter();
   scene.add(model);
-  simplifyBunnyLimbs(model);
-  for (const name of ["short_leg_footL", "short_leg_footR"]) {
-    const node = model.getObjectByName(name);
-    if (node) node.visible = false;
-  }
-  for (const name of ["earL", "earR"]) {
-    const node = model.getObjectByName(name);
-    if (node) node.scale.y *= 1.1;
+  if (isFallback) {
+    simplifyBunnyLimbs(model);
+    for (const name of ["short_leg_footL", "short_leg_footR"]) {
+      const node = model.getObjectByName(name);
+      if (node) node.visible = false;
+    }
+    for (const name of ["earL", "earR"]) {
+      const node = model.getObjectByName(name);
+      if (node) node.scale.y *= 1.1;
+    }
   }
   const armPivots = [];
-  for (const name of ["armL", "armR"]) {
-    const arm = model.getObjectByName(name);
+  for (const name of [parts.armL, parts.armR]) {
+    const arm = name ? model.getObjectByName(name) : null;
     if (!arm) continue;
     const pivot = new THREE.Group();
     pivot.position.copy(arm.position);
@@ -35,6 +37,21 @@ export async function renderReadyBunny(canvas, iconCanvas) {
     pivot.add(arm);
     pivot.rotation.x = Math.PI / 2;
     armPivots.push(pivot);
+  }
+  const flowPivots = [];
+  for (const name of parts.flowParts || []) {
+    const node = model.getObjectByName(name);
+    if (!node || !node.parent) continue;
+    node.updateMatrixWorld(true);
+    const box = new THREE.Box3().setFromObject(node);
+    const pivot = new THREE.Group();
+    const base = box.getCenter(new THREE.Vector3());
+    base.y = box.min.y;
+    pivot.position.copy(node.parent.worldToLocal(base));
+    node.parent.add(pivot);
+    node.position.sub(pivot.position);
+    pivot.add(node);
+    flowPivots.push(pivot);
   }
   model.rotation.y = Math.PI;
   model.traverse((o) => {
@@ -49,13 +66,13 @@ export async function renderReadyBunny(canvas, iconCanvas) {
   camera.position.set(center.x, center.y + 0.12, 8);
   camera.lookAt(center);
   if (iconCanvas) {
-    const head = model.getObjectByName("head");
+    const head = parts.head ? model.getObjectByName(parts.head) : null;
     if (head) {
       const visibility = model.children.map((child) => [child, child.visible]);
       for (const child of model.children) child.visible = child === head;
       const headBox = new THREE.Box3().setFromObject(head), headSize = headBox.getSize(new THREE.Vector3()), headCenter = headBox.getCenter(new THREE.Vector3());
       const aspect = iconCanvas.width / iconCanvas.height, halfHeight = Math.max(headSize.y, headSize.x / aspect) * 0.54;
-      const iconCamera = new THREE.OrthographicCamera(-halfHeight * aspect, halfHeight * aspect, halfHeight, -halfHeight, 0.1, 20);
+      const iconCamera = new THREE.OrthographicCamera(-halfHeight * aspect, halfHeight * aspect, halfHeight, -halfHeight, -0.1, 20);
       iconCamera.position.set(headCenter.x, headCenter.y, 8);
       iconCamera.lookAt(headCenter);
       renderer.setSize(iconCanvas.width, iconCanvas.height, false);
@@ -74,6 +91,7 @@ export async function renderReadyBunny(canvas, iconCanvas) {
     model.position.y = bounce * size.y * 0.22;
     model.scale.set(1 - bounce * 0.04, 1 + bounce * 0.06, 1 - bounce * 0.04);
     for (const pivot of armPivots) pivot.rotation.x = -0.15 - bounce * 0.2;
+    for (const pivot of flowPivots) pivot.rotation.x = -0.18 - bounce * 0.5;
     camera.zoom = 0.76;
     camera.updateProjectionMatrix();
     renderer.render(scene, camera);
