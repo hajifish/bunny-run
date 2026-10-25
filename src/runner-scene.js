@@ -198,6 +198,9 @@ export async function createRunnerScene(canvas) {
     if (state.phase === "playing") {
       lastVy = state.vy;
       wasAirborne = airborne;
+    } else {
+      wasAirborne = false;
+      lastVy = 0;
     }
     shakeAge += dt;
     if (!reducedMotion.matches && shakeAge < 0.16) {
