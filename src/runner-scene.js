@@ -86,6 +86,7 @@ export async function createRunnerScene(canvas) {
   const scale = 1.5 * (DINO.height / 100) / Math.max(0.1, headTop - bounds.min.y);
   bunny.scale.setScalar(scale);
   model.position.y = -bounds.min.y;
+  model.updateMatrixWorld(true);
   const limbs = [];
   const limbSpecs = [
     [parts.armL, 1, false],
@@ -113,7 +114,7 @@ export async function createRunnerScene(canvas) {
     const pivot = new THREE.Group();
     const base = box.getCenter(new THREE.Vector3());
     base.y = box.min.y;
-    pivot.position.copy(base);
+    pivot.position.copy(node.parent.worldToLocal(base));
     node.parent.add(pivot);
     node.position.sub(pivot.position);
     pivot.add(node);

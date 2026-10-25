@@ -17,7 +17,8 @@ async function fetchConfig(url) {
     const response = await fetch(url);
     if (!response.ok) return null;
     return { ...DEFAULTS, ...await response.json() };
-  } catch {
+  } catch (error) {
+    if (error instanceof SyntaxError) console.warn("[character] character.json is not valid JSON — ignoring it");
     return null;
   }
 }

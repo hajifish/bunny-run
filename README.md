@@ -92,14 +92,15 @@ Swap the character · 更换角色
 Drop any GLB at `public/models/character/character.glb` and it replaces the bunny
 everywhere (game, menu, share card). Parts are found by name — `head`, `armL/R`,
 `footL/R` (variants like `arm.left`, `shoe_r`, `Head_01` all work). For unusual
-names, or to add cap-flow physics and closing eyes, add a config file:
+names, or to add cap-flow physics and closing eyes, add a config file at
+`public/models/character/character.json`:
 
 把任意 GLB 放到 `public/models/character/character.glb`，即可在小游戏、菜单和成绩卡中
 替换小兔子。部件按名称自动识别（`head`、`armL/R`、`footL/R`，`arm.left`、`shoe_r`、
-`Head_01` 这类写法都可以）。命名特殊时，或想开启帽子飘动、死亡闭眼，请加配置文件：
+`Head_01` 这类写法都可以）。命名特殊时，或想开启帽子飘动、死亡闭眼，请在
+`public/models/character/character.json` 加配置文件：
 
 ```json
-// public/models/character/character.json
 {
   "model": "character.glb",
   "yaw": 0,
