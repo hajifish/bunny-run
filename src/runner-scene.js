@@ -104,6 +104,21 @@ export async function createRunnerScene(canvas) {
     pivot.add(node);
     limbs.push({ pivot, side, isLeg, spring: createSpring() });
   }
+  const flowPivots = [];
+  for (const name of parts.flowParts || []) {
+    const node = model.getObjectByName(name);
+    if (!node || !node.parent) continue;
+    node.updateMatrixWorld(true);
+    const box = new THREE.Box3().setFromObject(node);
+    const pivot = new THREE.Group();
+    const base = box.getCenter(new THREE.Vector3());
+    base.y = box.min.y;
+    pivot.position.copy(base);
+    node.parent.add(pivot);
+    node.position.sub(pivot.position);
+    pivot.add(node);
+    flowPivots.push({ pivot, spring: createSpring() });
+  }
   if (isFallback) {
     for (const name of ["short_leg_footL", "short_leg_footR"]) {
       const leg = model.getObjectByName(name);
@@ -197,6 +212,7 @@ export async function createRunnerScene(canvas) {
       shakeAge = 0;
       shakeStrength = Math.min(1, Math.abs(lastVy) / 650);
       dust.burst((DINO.x + DINO.width / 2) / 100 - 5, 0.02, 0.35 + shakeStrength * 0.65);
+      for (const { spring } of flowPivots) spring.velocity -= 6 * (0.4 + shakeStrength);
     }
     if (state.phase === "playing") {
       lastVy = state.vy;
@@ -267,6 +283,10 @@ export async function createRunnerScene(canvas) {
     for (const { pivot, side, isLeg, spring } of limbs) {
       const target = running ? stride * side * (isLeg ? 0.45 : -0.85) : state.y > 0 ? isLeg ? -0.45 : -0.7 : 0;
       pivot.rotation.x = stepSpring(spring, target, motionDt, 650, 24);
+    }
+    for (const { pivot, spring } of flowPivots) {
+      const target = state.phase === "over" ? 0.5 : -Math.max(-1, Math.min(1, state.vy / 650)) * 0.42;
+      pivot.rotation.x = stepSpring(spring, target, motionDt, 80, 7);
     }
     for (const ear of ears) {
       stepEarChain(ear.chain, 0, -0.1 - Math.min(0.5, Math.abs(state.vy) / 2e3) - (state.jumps > lastJumps ? 0.85 : 0) - (softness.vertical - 1) * 2, motionDt);
