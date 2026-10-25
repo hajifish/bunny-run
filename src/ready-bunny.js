@@ -39,6 +39,7 @@ export async function renderReadyBunny(canvas, iconCanvas) {
     armPivots.push(pivot);
   }
   const flowPivots = [];
+  model.updateMatrixWorld(true);
   for (const name of parts.flowParts || []) {
     const node = model.getObjectByName(name);
     if (!node || !node.parent) continue;
