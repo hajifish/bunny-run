@@ -157,6 +157,7 @@ export async function createRunnerScene(canvas) {
   const headRest = head?.rotation.x || 0;
   const reducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)");
   let keel = null, keelStartY = 0, keelPose = null;
+  const KEEL_AXIS = new THREE.Vector3(0, 0, 1), KEEL_YAW = new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 1, 0), -Math.PI / 2);
   let takeoffAge = 10;
   let lastTime = 0, lastJumps = 0, lastElapsed = 0, lastEyeAmount = -1;
   return { render(state, now, paused = false) {
@@ -204,7 +205,7 @@ export async function createRunnerScene(canvas) {
     if (keel) {
       keelPose = keel.step(dt);
       bunny.position.y = Math.max(0, keelStartY * (1 - Math.min(1, keelPose.age / 0.22)));
-      bunny.rotation.z += keelPose.angle;
+      bunny.quaternion.setFromAxisAngle(KEEL_AXIS, keelPose.angle).multiply(KEEL_YAW);
       // Task 7 fills this in: when keelPose.justSettled, burst dust at the body.
     }
     const amount = keelPose ? keelPose.eyeClose : 0;
