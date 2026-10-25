@@ -1,4 +1,5 @@
 import { createKeelOver } from "./keel-over.js";
+import { createDust } from "./dust.js";
 import { createScoreStars, starSlot } from "./score-stars.js";
 import { simplifyBunnyLimbs } from "./bunny-limbs.js";
 import { SUN } from "./sun-light.js";
@@ -39,6 +40,7 @@ export async function createRunnerScene(canvas) {
   scene.add(fill);
   Object.assign(light.shadow.camera, { left: -8, right: 8, top: 8, bottom: -8 });
   scene.add(light);
+  const dust = createDust(scene);
   const desert = await createDesert(scene);
   const bunny = new THREE.Group();
   const { model, parts, isFallback } = await loadCharacter();
@@ -194,6 +196,7 @@ export async function createRunnerScene(canvas) {
     if (state.phase === "playing" && wasAirborne && !airborne) {
       shakeAge = 0;
       shakeStrength = Math.min(1, Math.abs(lastVy) / 650);
+      dust.burst((DINO.x + DINO.width / 2) / 100 - 5, 0.02, 0.35 + shakeStrength * 0.65);
     }
     if (state.phase === "playing") {
       lastVy = state.vy;
@@ -225,7 +228,7 @@ export async function createRunnerScene(canvas) {
       keelPose = keel.step(dt);
       bunny.position.y = Math.max(0, keelStartY * (1 - Math.min(1, keelPose.age / 0.22)));
       bunny.quaternion.setFromAxisAngle(KEEL_AXIS, keelPose.angle).multiply(KEEL_YAW);
-      // Task 7 fills this in: when keelPose.justSettled, burst dust at the body.
+      if (keelPose.justSettled) dust.burst(bunny.position.x - 0.15, 0.02, 0.5);
     }
     const amount = keelPose ? keelPose.eyeClose : 0;
     if (amount !== lastEyeAmount) {
@@ -312,6 +315,7 @@ export async function createRunnerScene(canvas) {
       });
       carrots.delete(c);
     }
+    dust.update(dt, camera);
     desert.update(state.distance, state.elapsed, state.y, state.speed, zoom, dt);
     finish.render(scene, camera);
   }, captureShareBackground() {
