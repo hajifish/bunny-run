@@ -1,5 +1,7 @@
 import { createKeelOver } from "./keel-over.js";
 import { createDust } from "./dust.js";
+import { createSandstorm } from "./sandstorm.js";
+import { createBiomeWatcher } from "./biome-watcher.js";
 import { createScoreStars, starSlot } from "./score-stars.js";
 import { simplifyBunnyLimbs } from "./bunny-limbs.js";
 import { SUN } from "./sun-light.js";
@@ -42,6 +44,11 @@ export async function createRunnerScene(canvas) {
   scene.add(light);
   const dust = createDust(scene);
   const desert = await createDesert(scene);
+  const sandstorm = createSandstorm(scene);
+  const watcher = createBiomeWatcher({
+    onTrigger: () => sandstorm.trigger({ atPeak: () => desert.setBiome("desert") }),
+    onReset: () => desert.setBiome("meadow")
+  });
   const bunny = new THREE.Group();
   const { model, parts, isFallback } = await loadCharacter();
   if (isFallback) simplifyBunnyLimbs(model);
@@ -228,6 +235,9 @@ export async function createRunnerScene(canvas) {
       camera.position.y += Math.sin(shakeAge * 70) * 0.032 * shakeStrength * decay * zoom;
       camera.position.x += Math.sin(shakeAge * 53 + 1.3) * 0.016 * shakeStrength * decay;
     }
+    watcher.update(state);
+    sandstorm.update(dt, zoom, camera);
+    if (sandstorm.active && !reducedMotion.matches) camera.position.y += Math.sin(now * 47) * 0.012 * sandstorm.intensity * zoom;
     camera.updateProjectionMatrix();
     const running = state.phase === "playing" && state.y === 0;
     const phase = state.distance / 160 * Math.PI * 2;
