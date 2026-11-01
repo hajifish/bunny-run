@@ -95,6 +95,36 @@ function texture(kind, colorIndex = 0) {
       ctx.stroke();
     }
   }
+  if (kind === 10) {
+    for (let i = 0; i < 26; i++) {
+      const x = 128 + (random() - 0.5) * 60, angle = -Math.PI / 2 + (random() - 0.5) * 1.9, length = 60 + random() * 95;
+      ctx.strokeStyle = ["#9a7d4e", "#b39666", "#7d6b45", "#8a815c"][i % 4];
+      ctx.lineWidth = 2.5 + random() * 2.5;
+      ctx.lineCap = "round";
+      ctx.beginPath();
+      ctx.moveTo(x, 384);
+      const midX = x + Math.cos(angle) * length * 0.5 + (random() - 0.5) * 26;
+      ctx.quadraticCurveTo(midX, 384 + Math.sin(angle) * length * 0.55, x + Math.cos(angle) * length * 0.8, 384 + Math.sin(angle) * length);
+      ctx.stroke();
+    }
+  }
+  if (kind === 11) {
+    const blobs = [[128, 300, 74, 58], [76, 322, 42, 34], [184, 318, 48, 36]];
+    for (const [cx, cy, rx, ry] of blobs) {
+      const shade = ctx.createLinearGradient(cx, cy - ry, cx, cy + ry);
+      shade.addColorStop(0, "#b0a290");
+      shade.addColorStop(0.55, "#8d7f6d");
+      shade.addColorStop(1, "#6a5e50");
+      ctx.fillStyle = shade;
+      ctx.beginPath();
+      ctx.ellipse(cx, cy, rx, ry, 0, 0, Math.PI * 2);
+      ctx.fill();
+    }
+    ctx.fillStyle = "rgba(255,250,240,.28)";
+    ctx.beginPath();
+    ctx.ellipse(108, 282, 26, 13, -0.35, 0, Math.PI * 2);
+    ctx.fill();
+  }
   const result = new THREE.CanvasTexture(canvas);
   result.colorSpace = THREE.SRGBColorSpace;
   return result;
@@ -232,7 +262,37 @@ export async function createForestCards(scene) {
   needles.frustumCulled = false;
   scene.add(needles);
   batches.push({ mesh: needles, items: needleItems, ground: true, forest: true });
-  return { update(distance, zoom, sunlight = 1) {
+  const desertMeshes = [], desertBatches = [];
+  const desertRandom = rng(66413);
+  const shrubItems = [];
+  for (let i = 0; i < 130; i++) {
+    const h = 0.28 + desertRandom() * 0.34;
+    shrubItems.push({ x: desertRandom() * 40, z: -3.2 - desertRandom() * 8.5, h, w: h * (0.7 + desertRandom() * 0.4) });
+  }
+  const rockItems = [];
+  for (let i = 0; i < 70; i++) {
+    const h = 0.1 + desertRandom() * 0.22;
+    rockItems.push({ x: desertRandom() * 40, z: -2.7 - desertRandom() * 9, h, w: 0.16 + desertRandom() * 0.26 });
+  }
+  for (const [items, kind, alphaTest] of [[shrubItems, 10, 0.3], [rockItems, 11, 0.4]]) {
+    const mesh = new THREE.InstancedMesh(geometry, new THREE.MeshBasicMaterial({ map: texture(kind), alphaTest, side: THREE.DoubleSide }), items.length);
+    mesh.frustumCulled = false;
+    mesh.visible = false;
+    scene.add(mesh);
+    desertMeshes.push(mesh);
+    desertBatches.push({ mesh, items, forest: true });
+  }
+  const meadowMeshes = [canopy, ...batches.map((b) => b.mesh), ...shadows.map((s) => s.mesh)];
+  let biome = "meadow", activeBatches = batches;
+  function setBiome(next) {
+    if (next === biome) return;
+    biome = next;
+    const desert = next === "desert";
+    for (const mesh of meadowMeshes) mesh.visible = !desert;
+    for (const mesh of desertMeshes) mesh.visible = desert;
+    activeBatches = desert ? desertBatches : batches;
+  }
+  return { setBiome, update(distance, zoom, sunlight = 1) {
     const retreat = forestRetreat(zoom);
     canopy.position.z = -10.4 - retreat;
     canopyMap.offset.x = distance / 100 * 0.035 / 8 + 2.5 * (1 - zoom);
@@ -240,7 +300,7 @@ export async function createForestCards(scene) {
     canopy.scale.x = zoom;
     canopyMap.repeat.x = 5 * zoom;
     dummy.rotation.set(0, 0, 0);
-    for (const { mesh, items, ground, forest, meadow } of batches) {
+    for (const { mesh, items, ground, forest, meadow } of activeBatches) {
       for (let i = 0; i < items.length; i++) {
         const p = items[i], z = meadow ? meadowDepth(p.z, zoom) : p.z - (forest ? retreat : 0), speed = sceneryParallax(z);
         dummy.position.set(wrap(p.x - distance / 100 * speed, 40) + (zoom - 1) * 5, ground ? -0.012 : -0.015, z);
@@ -251,17 +311,19 @@ export async function createForestCards(scene) {
       }
       mesh.instanceMatrix.needsUpdate = true;
     }
-    dummy.rotation.set(-Math.PI / 2, 0, -Math.atan2(SUN_SHADOW.x, -SUN_SHADOW.z));
-    for (const { mesh, items } of shadows) {
-      mesh.material.opacity = TREE_SHADOW_OPACITY * sunlight;
-      for (let i = 0; i < items.length; i++) {
-        const p = items[i];
-        dummy.position.set(wrap(p.x - distance / 100 * sceneryParallax(p.z - retreat), 40) + (zoom - 1) * 5, 1e-3, p.z - retreat);
-        dummy.scale.set(p.w, p.h * Math.hypot(SUN_SHADOW.x, SUN_SHADOW.z), 1);
-        dummy.updateMatrix();
-        mesh.setMatrixAt(i, dummy.matrix);
+    if (biome === "meadow") {
+      dummy.rotation.set(-Math.PI / 2, 0, -Math.atan2(SUN_SHADOW.x, -SUN_SHADOW.z));
+      for (const { mesh, items } of shadows) {
+        mesh.material.opacity = TREE_SHADOW_OPACITY * sunlight;
+        for (let i = 0; i < items.length; i++) {
+          const p = items[i];
+          dummy.position.set(wrap(p.x - distance / 100 * sceneryParallax(p.z - retreat), 40) + (zoom - 1) * 5, 1e-3, p.z - retreat);
+          dummy.scale.set(p.w, p.h * Math.hypot(SUN_SHADOW.x, SUN_SHADOW.z), 1);
+          dummy.updateMatrix();
+          mesh.setMatrixAt(i, dummy.matrix);
+        }
+        mesh.instanceMatrix.needsUpdate = true;
       }
-      mesh.instanceMatrix.needsUpdate = true;
     }
   } };
 }
