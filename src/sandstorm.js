@@ -55,6 +55,11 @@ export function createSandstorm(scene) {
       peakFired = false;
       peak = atPeak || null;
     },
+    dismiss() {
+      active = false;
+      peak = null;
+      for (const layer of layers) layer.mesh.visible = false;
+    },
     update(dt, zoom = 1, camera = null) {
       if (!active) return false;
       time += dt;

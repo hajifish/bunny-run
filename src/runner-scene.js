@@ -47,7 +47,10 @@ export async function createRunnerScene(canvas) {
   const sandstorm = createSandstorm(scene);
   const watcher = createBiomeWatcher({
     onTrigger: () => sandstorm.trigger({ atPeak: () => desert.setBiome("desert") }),
-    onReset: () => desert.setBiome("meadow")
+    onReset: () => {
+      sandstorm.dismiss();
+      desert.setBiome("meadow");
+    }
   });
   const bunny = new THREE.Group();
   const { model, parts, isFallback } = await loadCharacter();

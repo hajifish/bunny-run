@@ -82,11 +82,11 @@ export async function createDesert(scene) {
     shader.vertexShader = shader.vertexShader.replace("#include <begin_vertex>", `#include <begin_vertex>
       groundDepth=(modelMatrix*vec4(position,1.0)).z;`);
     shader.fragmentShader = "varying float groundDepth;\nuniform float groundTravel;\n" + sceneryParallaxGLSL + "\n" + shader.fragmentShader;
-    const groundMap = THREE.ShaderChunk.map_fragment.replace(
+    const parallaxMapChunk = THREE.ShaderChunk.map_fragment.replace(
       "texture2D( map, vMapUv )",
       "texture2D( map, vMapUv + vec2(groundTravel*.5*groundSpeedAtDepth(groundDepth),0.0) )"
     );
-    shader.fragmentShader = shader.fragmentShader.replace("#include <map_fragment>", groundMap);
+    shader.fragmentShader = shader.fragmentShader.replace("#include <map_fragment>", parallaxMapChunk);
     shader.fragmentShader = "uniform float sunlightVisibility;\n" + shader.fragmentShader;
     const lighting = THREE.ShaderChunk.lights_fragment_begin.replace(
       "getDirectionalLightInfo( directionalLight, directLight );",
@@ -139,7 +139,7 @@ export async function createDesert(scene) {
     mountains.forEach((mesh) => {
       mesh.geometry = desert ? dunes : ridge;
     });
-    forest.setBiome?.(next);
+    forest.setBiome(next);
     sky.setWarmth(desert ? 1 : 0);
   }
   const wrap = (x, width) => ((x + width / 2) % width + width) % width - width / 2;
