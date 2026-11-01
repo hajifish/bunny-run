@@ -4,22 +4,22 @@ import { createForestCards } from "./forest-cards.js";
 import { createCloudSky } from "./cloud-sky.js";
 import * as THREE from "./vendor/three.module.min.js";
 const matte = (color) => new THREE.MeshPhysicalMaterial({ color, roughness: 0.4, clearcoat: 0.12, clearcoatRoughness: 0.45 });
-function grassTexture() {
+function groundTexture([r, g, b], seed, grainScale = 1) {
   const size = 256, canvas = document.createElement("canvas");
   canvas.width = canvas.height = size;
   const ctx = canvas.getContext("2d"), image = ctx.createImageData(size, size);
-  let seed = 9231;
+  let state = seed + 1947;
   const random = () => {
-    seed = seed * 1664525 + 1013904223 >>> 0;
-    return seed / 4294967296;
+    state = state * 1664525 + 1013904223 >>> 0;
+    return state / 4294967296;
   };
   for (let y = 0; y < size; y++) for (let x = 0; x < size; x++) {
     const u = x / size * Math.PI * 2, v = y / size * Math.PI * 2;
     const patch = Math.sin(u * 2 + Math.sin(v)) * 5 + Math.cos(v * 3 + u) * 4 + Math.sin(u * 5 - v * 2) * 3;
-    const grain = (random() - 0.5) * 2, offset = (y * size + x) * 4;
-    image.data[offset] = 111 + patch * 0.6 + grain;
-    image.data[offset + 1] = 163 + patch * 0.6 + grain;
-    image.data[offset + 2] = 53 + patch * 0.4 + grain;
+    const grain = (random() - 0.5) * 2 * grainScale, offset = (y * size + x) * 4;
+    image.data[offset] = r + patch * 0.6 + grain;
+    image.data[offset + 1] = g + patch * 0.6 + grain;
+    image.data[offset + 2] = b + patch * 0.4 + grain;
     image.data[offset + 3] = 255;
   }
   ctx.putImageData(image, 0, 0);
@@ -37,7 +37,7 @@ function seeded(seed) {
   };
 }
 const MOUNTAIN_WIDTH = 35;
-function mountainGeometry(seed) {
+function mountainGeometry(seed, low = "#64816d", high = "#94ae96") {
   const random = seeded(seed * 139), peaks = Array.from({ length: 24 }, () => ({ x: (random() - 0.5) * MOUNTAIN_WIDTH, h: 0.45 + random() * 1.05, w: 0.45 + random() * 0.85 }));
   const vertices = [], colors = [], indices = [], columns = 600, rows = 4;
   for (let i = 0; i <= columns; i++) {
@@ -48,7 +48,7 @@ function mountainGeometry(seed) {
     for (let j = 0; j <= rows; j++) {
       const t = j / rows, y = -2 + (height + 2) * t;
       vertices.push(x, y, 0);
-      const color = new THREE.Color("#64816d").lerp(new THREE.Color("#94ae96"), Math.pow(t, 3) * 0.7 + 0.025 * Math.sin(phase * 11 + seed));
+      const color = new THREE.Color(low).lerp(new THREE.Color(high), Math.pow(t, 3) * 0.7 + 0.025 * Math.sin(phase * 11 + seed));
       colors.push(color.r, color.g, color.b);
       if (i < columns && j < rows) {
         const k = i * (rows + 1) + j;
@@ -64,8 +64,12 @@ function mountainGeometry(seed) {
   return geometry;
 }
 export async function createDesert(scene) {
-  const nearTexture = grassTexture();
+  const nearTexture = groundTexture([111, 163, 53], 9231);
   nearTexture.repeat.set(20, 29.5 * 9 / 26);
+  const sandTexture = groundTexture([222, 185, 143], 55019, 0.7);
+  sandTexture.repeat.copy(nearTexture.repeat);
+  sandTexture.offset.copy(nearTexture.offset);
+  let groundMap = nearTexture;
   const geometry = new THREE.PlaneGeometry(40, 29.5, 1, 12);
   geometry.rotateX(-Math.PI / 2);
   geometry.translate(0, -0.025, 0.75);
@@ -106,7 +110,7 @@ export async function createDesert(scene) {
   ground.receiveShadow = true;
   scene.add(ground);
   const forest = await createForestCards(scene);
-  const ridge = mountainGeometry(7), ridgeMaterial = new THREE.MeshBasicMaterial({ vertexColors: true, side: THREE.DoubleSide });
+  const ridge = mountainGeometry(7), dunes = mountainGeometry(7, "#c9a86a", "#e0c896"), ridgeMaterial = new THREE.MeshBasicMaterial({ vertexColors: true, side: THREE.DoubleSide });
   const ridgeSunX = { value: 0 }, ridgeZoom = { value: 1 };
   ridgeMaterial.onBeforeCompile = (shader) => {
     shader.uniforms.ridgeSunX = ridgeSunX;
@@ -125,13 +129,26 @@ export async function createDesert(scene) {
     return mesh;
   });
   const sky = createCloudSky(scene);
+  let biome = "meadow";
+  function setBiome(next) {
+    if (next === biome) return;
+    biome = next;
+    const desert = next === "desert";
+    groundMap = desert ? sandTexture : nearTexture;
+    groundMaterial.map = groundMap;
+    mountains.forEach((mesh) => {
+      mesh.geometry = desert ? dunes : ridge;
+    });
+    forest.setBiome?.(next);
+    sky.setWarmth(desert ? 1 : 0);
+  }
   const wrap = (x, width) => ((x + width / 2) % width + width) % width - width / 2;
-  return { update(distance, elapsed = 0, bunnyY = 0, speed = 280, zoom = 1, dt = 0) {
+  return { setBiome, update(distance, elapsed = 0, bunnyY = 0, speed = 280, zoom = 1, dt = 0) {
     const travel = distance / 100;
     ground.scale.x = zoom;
     ground.position.x = (zoom - 1) * 5;
-    nearTexture.repeat.x = 20 * zoom;
-    nearTexture.offset.x = 10 * (1 - zoom);
+    groundMap.repeat.x = 20 * zoom;
+    groundMap.offset.x = 10 * (1 - zoom);
     groundTravel.value = travel;
     const sunlight = sky.update(distance, elapsed, zoom, dt);
     sunlightVisibility.value = sunlight;

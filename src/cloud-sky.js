@@ -40,12 +40,15 @@ function densityTexture(variant = 0) {
 }
 export function createCloudSky(scene) {
   const sky = new THREE.Mesh(new THREE.PlaneGeometry(60, 20), new THREE.ShaderMaterial({
+    uniforms: { warmth: { value: 0 } },
     depthWrite: false,
     toneMapped: false,
     vertexShader: "varying vec3 skyPos; void main(){skyPos=(modelMatrix*vec4(position,1.)).xyz;gl_Position=projectionMatrix*modelViewMatrix*vec4(position,1.);}",
     fragmentShader: `varying vec3 skyPos;
+      uniform float warmth;
       void main(){float h=smoothstep(-6.0,-.5,skyPos.y);
       vec3 color=mix(vec3(.78,.86,.88),vec3(.025,.20,.61),h);
+      color=mix(color,vec3(.85,.68,.46),warmth*(1.0-smoothstep(-1.5,4.0,skyPos.y))*.6);
       float sun=exp(-length((skyPos.xy-vec2(-3.,4.))*vec2(.7,1.))*1.5);
       color+=vec3(.12,.09,.025)*sun;gl_FragColor=vec4(color,1.);}`
   }));
@@ -113,7 +116,9 @@ export function createCloudSky(scene) {
   });
   material.dispose();
   let sunlight = 1;
-  return { update(distance, elapsed = 0, zoom = 1, dt = 0) {
+  return { setWarmth(value) {
+    sky.material.uniforms.warmth.value = value;
+  }, update(distance, elapsed = 0, zoom = 1, dt = 0) {
     const position = sunBillboardPosition(zoom);
     sun.position.set(position.x, position.y, position.z);
     sun.scale.setScalar(zoom);
