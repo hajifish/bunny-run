@@ -4,3 +4,4 @@ public/vendor/
 public/models/character/
 .DS_Store
 *.log
+.playwright-mcp/
