@@ -294,7 +294,7 @@ $("sensitivity").oninput = () => {
   resetTracking();
 };
 window.addEventListener("keydown", (event) => {
-  if (!view || !["Space", "ArrowUp"].includes(event.code) || event.target.isContentEditable || /INPUT|SELECT|BUTTON|TEXTAREA|SUMMARY/.test(event.target.tagName)) return;
+  if (!view || event.code !== "ArrowUp" || event.target.isContentEditable || /INPUT|SELECT|BUTTON|TEXTAREA|SUMMARY/.test(event.target.tagName)) return;
   event.preventDefault();
   if (event.repeat || document.hidden || sharing) return;
   if (game.state.phase !== "playing") {
